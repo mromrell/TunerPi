@@ -330,3 +330,4 @@ chown -R "${USER_NAME}:${USER_NAME}" \
 
 touch /var/lib/pi-tuner-firstboot-complete
 sync
+systemctl reboot
