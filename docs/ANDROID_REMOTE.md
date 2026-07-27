@@ -50,6 +50,16 @@ tailnet once. From the local network, run:
 Open the one-time URL that Tailscale prints, approve the device, then connect
 from any tailnet device using its Tailscale IP or the approved machine name.
 
+## APK download link
+
+The companion APK is privately served to tailnet devices at:
+
+`https://tunerpi.taila595a0.ts.net/TunerPiRemote-debug.apk`
+
+To replace it after a future build, run `tools/Publish-TunerPiApk.ps1`. This
+link is Tailscale Serve, not a public Funnel endpoint, so the phone must be
+connected to the same tailnet.
+
 The script waits for the Pi, verifies the health/log APIs, the configured
 Bluetooth identity and state, and loads noVNC's touch-display page. It writes a
 machine-readable report under `test-results/`. `Test-TunerPiBluetooth.ps1`
