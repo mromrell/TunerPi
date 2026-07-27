@@ -9,7 +9,7 @@ This fork adds the Raspberry Pi 4 integration for a BMW 325i MicroSquirt:
 
 ## Operating model
 
-`crankshaft-core` starts at boot and hosts wireless Android Auto. The Slim UI is deliberately launched from the touch screen, because its EGLFS renderer takes exclusive ownership of the display. Select **Android Auto** for Maps/Spotify; select **TunerStudio** for the ECU dashboard; select **Open Logs** to browse data logs.
+`crankshaft-core` starts at boot and hosts wireless Android Auto. The Slim UI is deliberately launched from the touch screen, because its EGLFS renderer takes exclusive ownership of the display. Select **Android Auto** for Maps/Spotify; select **TunerStudio** for the ECU dashboard; select **Open Logs** to browse data logs. **Split View** is included as a best-effort XWayland mode (Android Auto left, TunerStudio right); use either full-screen mode if a particular display compositor does not arrange it.
 
 TunerStudio retains its automatic USB launch and automatic logging configuration. It can log while Android Auto is shown.
 

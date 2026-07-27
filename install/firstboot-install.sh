@@ -22,7 +22,7 @@ systemctl enable ssh
 # (Debian/Trixie arm64).  This is the Android Auto runtime used by TunerPi.
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  ca-certificates curl gpg python3-tk
+  ca-certificates curl gpg python3-tk wmctrl
 curl -fsSL https://apt.opencardev.org/opencardev.gpg.key \
   | gpg --dearmor --yes --output /usr/share/keyrings/opencardev-archive-keyring.gpg
 ARCH="$(dpkg --print-architecture)"
@@ -166,11 +166,23 @@ case "${1:-}" in
   logs)
     xdg-open /home/tuner/TunerStudioProjects/1989_BMW_325i_MicroSquirt/DataLogs
     ;;
+  split)
+    # Best-effort XWayland/X11 split mode.  The regular AA mode stays the
+    # reliable full-screen option; this mode is intentionally recoverable.
+    sudo systemctl stop crankshaft-ui-slim.service || true
+    /usr/local/bin/start-bmw-tunerstudio &
+    sleep 3
+    sudo -u tuner env DISPLAY=:0 XAUTHORITY=/home/tuner/.Xauthority \
+      QT_QPA_PLATFORM=xcb /usr/bin/crankshaft-ui-slim &
+    sleep 5
+    wmctrl -r 'Crankshaft Slim UI - AndroidAuto' -e 0,0,0,640,480 || true
+    wmctrl -r 'TunerStudio' -e 0,640,0,640,480 || true
+    ;;
   stop-android-auto)
     sudo systemctl stop crankshaft-ui-slim.service || true
     ;;
   *)
-    echo "Usage: tunerpi-mode {android-auto|tunerstudio|logs|stop-android-auto}" >&2
+    echo "Usage: tunerpi-mode {android-auto|tunerstudio|logs|split|stop-android-auto}" >&2
     exit 64
     ;;
 esac
@@ -217,7 +229,8 @@ tile('ANDROID AUTO', 'Wireless projection • Maps • Spotify', BLUE, 'android-
 tile('TUNERSTUDIO', 'Wide touch dash • ECU metrics • logging', AMBER, 'tunerstudio', 0, 1)
 tile('OPEN LOGS', 'Review and copy MicroSquirt data logs', '#435466', 'logs', 0, 2)
 tile('RETURN FROM AA', 'Close Android Auto and return here', '#435466', 'stop-android-auto', 1, 0)
-tk.Label(buttons, text='Android Auto connects through the TunerPi-AA hotspot.\nTunerStudio continues to log whenever its USB ECU cable is present.', font=('DejaVu Sans', 12), justify='left', bg=BG, fg=TEXT).grid(row=1, column=1, columnspan=2, sticky='nsew', padx=18, pady=16)
+tile('SPLIT VIEW', 'Experimental: Android Auto left, TunerStudio right', '#435466', 'split', 1, 1)
+tk.Label(buttons, text='Android Auto connects through the TunerPi-AA hotspot.\nTunerStudio continues to log whenever its USB ECU cable is present.', font=('DejaVu Sans', 12), justify='left', bg=BG, fg=TEXT).grid(row=1, column=2, sticky='nsew', padx=18, pady=16)
 
 root.mainloop()
 EOF
@@ -281,6 +294,9 @@ BMW TunerStudio Pi
 - The Pi joins OldEthels when Android Auto is not using its Wi-Fi radio.
 - Android Auto and TunerStudio are separate full-screen renderers; use the
   TunerPi launcher to switch modes. TunerStudio still logs in the background.
+- Split View is an experimental XWayland mode: Android Auto left, TunerStudio
+  right. If it does not arrange windows on the attached display, use either
+  full-screen mode instead.
 
 In TunerStudio Pro, verify Data Logging > Automatic Logging is enabled with:
 Start: RPM > 0
