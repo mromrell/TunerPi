@@ -26,5 +26,9 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable tunerpi-recovery-v2.service
+# Remove the one-time kernel command-line trigger before its requested reboot.
+# Leaving systemd.unit=kernel-command-line.target behind would prevent the
+# subsequent normal graphical boot after this script deletes itself.
+sed -i -E 's/ systemd\.run=[^ ]+//g; s/ systemd\.run_success_action=[^ ]+//g; s/ systemd\.unit=kernel-command-line\.target//g' /boot/firmware/cmdline.txt
 rm -f /boot/firmware/tunerpi-recovery-v2.sh
 sync

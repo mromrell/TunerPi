@@ -58,3 +58,5 @@ If the SD card was removed before first boot provisioning finished, use the
 boot-partition recovery trigger supplied in `install/tunerpi-recovery-v2.sh`.
 It clears only the TunerPi completion marker, registers the installer as a
 network-aware one-time service, and leaves all Raspberry Pi OS data intact.
+The recovery script also removes its one-time kernel command-line target before
+rebooting, so normal graphical boot resumes afterward.
