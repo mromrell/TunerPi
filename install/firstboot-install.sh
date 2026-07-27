@@ -18,6 +18,25 @@ fi
 raspi-config nonint do_boot_behaviour B4
 systemctl enable ssh
 
+# Raspberry Pi OS uses NetworkManager.  The original boot image does not
+# consume cloud-init's network-config, so create the known update connection
+# here and wait for Internet before touching apt.  Wireless Android Auto later
+# takes over wlan0 only while projection is active.
+rfkill unblock wifi || true
+if command -v nmcli >/dev/null 2>&1; then
+  nmcli --wait 15 device wifi connect 'OldEthelsPantaloons-2.4' password '1234internet4321' || true
+fi
+for attempt in $(seq 1 60); do
+  if nmcli -t -f STATE general 2>/dev/null | grep -qx connected; then
+    break
+  fi
+  if [ "${attempt}" -eq 60 ]; then
+    echo 'Internet connection unavailable after 5 minutes; provisioning will retry next boot.' >&2
+    exit 75
+  fi
+  sleep 5
+done
+
 # Install the supported, current Crankshaft packages for Raspberry Pi OS
 # (Debian/Trixie arm64).  This is the Android Auto runtime used by TunerPi.
 apt-get update -qq
