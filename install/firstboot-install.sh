@@ -51,6 +51,10 @@ printf 'deb [arch=%s signed-by=/usr/share/keyrings/opencardev-archive-keyring.gp
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   crankshaft-core crankshaft-ui-slim
+# Remote viewing is deliberately optional: logging and the local touchscreen
+# remain usable if a package is unavailable on a future Pi OS mirror.
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  novnc websockify wayvnc || echo 'Remote display packages unavailable; logs API will still be installed.'
 systemctl enable crankshaft-core.service
 # The UI is started from the touch launcher.  Running it automatically would
 # take exclusive control of the display and hide the TunerStudio controls.
@@ -212,6 +216,93 @@ case "${1:-}" in
 esac
 EOF
 chmod 0755 /usr/local/bin/tunerpi-mode
+
+cat > /usr/local/bin/tunerpi-logs-api <<'EOF'
+#!/usr/bin/env python3
+"""Private-Wi-Fi API for listing and downloading BMW ECU logs."""
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+import json
+import mimetypes
+
+LOG_DIR = Path('/home/tuner/TunerStudioProjects/1989_BMW_325i_MicroSquirt/DataLogs')
+ALLOWED = {'.msl', '.mlg', '.csv'}
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_args): pass
+    def send_json(self, value):
+        body = json.dumps(value).encode()
+        self.send_response(200); self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+    def do_GET(self):
+        path = urlparse(self.path).path
+        if path == '/api/logs':
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            items = []
+            for file in sorted(LOG_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
+                if file.is_file() and file.suffix.lower() in ALLOWED:
+                    stat = file.stat()
+                    items.append({'name': file.name, 'size': stat.st_size, 'modified': int(stat.st_mtime), 'url': '/logs/' + file.name})
+            return self.send_json(items)
+        if path.startswith('/logs/'):
+            name = Path(unquote(path[len('/logs/'):])).name
+            file = LOG_DIR / name
+            if file.is_file() and file.suffix.lower() in ALLOWED:
+                data = file.read_bytes()
+                self.send_response(200); self.send_header('Content-Type', mimetypes.guess_type(file.name)[0] or 'application/octet-stream')
+                self.send_header('Content-Disposition', 'attachment; filename="%s"' % file.name)
+                self.send_header('Content-Length', str(len(data))); self.end_headers(); self.wfile.write(data); return
+        self.send_error(404)
+
+ThreadingHTTPServer(('0.0.0.0', 8088), Handler).serve_forever()
+EOF
+chmod 0755 /usr/local/bin/tunerpi-logs-api
+
+cat > /etc/systemd/system/tunerpi-logs-api.service <<'EOF'
+[Unit]
+Description=TunerPi private ECU log API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=tuner
+ExecStart=/usr/local/bin/tunerpi-logs-api
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl enable tunerpi-logs-api.service
+
+cat > /usr/local/bin/tunerpi-start-remote-display <<'EOF'
+#!/bin/bash
+set -u
+pkill -f 'wayvnc.*5900' || true
+pkill -f 'novnc_proxy.*6080' || true
+sleep 2
+if ! command -v wayvnc >/dev/null || ! command -v novnc_proxy >/dev/null; then exit 0; fi
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+wayvnc 0.0.0.0 5900 > /tmp/tunerpi-wayvnc.log 2>&1 &
+for _ in $(seq 1 20); do nc -z 127.0.0.1 5900 && break; sleep 1; done
+novnc_proxy --listen 6080 --vnc 127.0.0.1:5900 --web /usr/share/novnc > /tmp/tunerpi-novnc.log 2>&1 &
+EOF
+chmod 0755 /usr/local/bin/tunerpi-start-remote-display
+
+cat > "${USER_HOME}/.config/autostart/tunerpi-remote-display.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=TunerPi Remote Display
+Comment=Private Wi-Fi display mirror for TunerPi Remote
+Exec=/usr/local/bin/tunerpi-start-remote-display
+Terminal=false
+X-GNOME-Autostart-enabled=true
+EOF
+
+bluetoothctl system-alias 'TunerPi BMW 325i' || true
+bluetoothctl discoverable on || true
+bluetoothctl pairable on || true
 
 cat > /usr/local/bin/tunerpi-touch <<'EOF'
 #!/usr/bin/env python3
