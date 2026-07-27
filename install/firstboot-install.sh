@@ -341,15 +341,15 @@ systemctl enable tunerpi-logs-api.service
 cat > /usr/local/bin/tunerpi-start-remote-display <<'EOF'
 #!/bin/bash
 set -u
-pkill -f 'wayvnc.*5900' || true
-pkill -f 'novnc_proxy.*6080' || true
+pkill -x wayvnc || true
+pkill -x websockify || true
 sleep 2
-if ! command -v wayvnc >/dev/null || ! command -v novnc_proxy >/dev/null; then exit 0; fi
+if ! command -v wayvnc >/dev/null || ! command -v websockify >/dev/null; then exit 0; fi
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 wayvnc 0.0.0.0 5900 > /tmp/tunerpi-wayvnc.log 2>&1 &
 for _ in $(seq 1 20); do nc -z 127.0.0.1 5900 && break; sleep 1; done
-novnc_proxy --listen 6080 --vnc 127.0.0.1:5900 --web /usr/share/novnc > /tmp/tunerpi-novnc.log 2>&1 &
+websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 > /tmp/tunerpi-novnc.log 2>&1 &
 EOF
 chmod 0755 /usr/local/bin/tunerpi-start-remote-display
 
@@ -366,6 +366,43 @@ EOF
 bluetoothctl system-alias 'TunerPi BMW 325i' || true
 bluetoothctl discoverable on || true
 bluetoothctl pairable on || true
+
+cat > /usr/local/bin/tunerpi-enable-bluetooth <<'EOF'
+#!/bin/bash
+set -u
+/usr/sbin/rfkill unblock bluetooth || true
+for _ in $(seq 1 20); do
+  /usr/bin/bluetoothctl power on || true
+  if /usr/bin/bluetoothctl show | grep -q 'Powered: yes'; then
+    /usr/bin/bluetoothctl system-alias 'TunerPi BMW 325i'
+    /usr/bin/bluetoothctl discoverable-timeout 0
+    /usr/bin/bluetoothctl discoverable on
+    /usr/bin/bluetoothctl pairable on
+    exit 0
+  fi
+  sleep 2
+done
+exit 1
+EOF
+chmod 0755 /usr/local/bin/tunerpi-enable-bluetooth
+
+cat > /etc/systemd/system/tunerpi-bluetooth.service <<'EOF'
+[Unit]
+Description=Enable TunerPi Bluetooth discovery and pairing
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tunerpi-enable-bluetooth
+Restart=on-failure
+RestartSec=5
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl enable --now tunerpi-bluetooth.service
 
 cat > /usr/local/bin/tunerpi-touch <<'EOF'
 #!/usr/bin/env python3
@@ -390,6 +427,32 @@ frame = tk.Frame(root, bg=BG, padx=28, pady=18)
 frame.pack(fill='both', expand=True)
 tk.Label(frame, text='TUNERPI  |  BMW 325i', font=('DejaVu Sans', 24, 'bold'), bg=BG, fg=TEXT).pack(anchor='w')
 tk.Label(frame, text='GAUGES DEFAULT  |  Android Auto wireless  |  ECU logging armed', font=('DejaVu Sans', 11, 'bold'), bg=BG, fg=MUTED).pack(anchor='w', pady=(0, 12))
+connection = tk.Label(frame, font=('DejaVu Sans', 11, 'bold'), bg=PANEL, fg=TEXT, padx=12, pady=8, anchor='w')
+connection.pack(fill='x', pady=(0, 10))
+
+def command(*args):
+    try:
+        return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL, timeout=2).strip()
+    except Exception:
+        return ''
+
+def update_connection():
+    wifi = command('nmcli', '-t', '-f', 'ACTIVE,SSID,SIGNAL', 'device', 'wifi', 'list')
+    active = next((line.split(':', 2) for line in wifi.splitlines() if line.startswith('yes:')), None)
+    ip = command('nmcli', '-g', 'IP4.ADDRESS', 'device', 'show', 'wlan0').splitlines()
+    wifi_text = 'Wi-Fi: offline'
+    if active:
+        wifi_text = f'Wi-Fi: {active[1]}  {active[2]}%'
+    if ip:
+        wifi_text += f'  {ip[0].split("/")[0]}'
+    bt = command('bluetoothctl', 'show')
+    powered = 'Powered: yes' in bt
+    discoverable = 'Discoverable: yes' in bt
+    bt_text = 'Bluetooth: ready' if powered and discoverable else 'Bluetooth: starting'
+    connection.config(text=f'{wifi_text}    |    {bt_text}', fg='#7de3bb' if powered and active else AMBER)
+    root.after(2000, update_connection)
+
+update_connection()
 
 buttons = tk.Frame(frame, bg=BG)
 buttons.pack(fill='both', expand=True)
