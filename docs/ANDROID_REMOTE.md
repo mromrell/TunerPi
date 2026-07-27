@@ -58,7 +58,8 @@ The companion APK is privately served to tailnet devices at:
 
 To replace it after a future build, run `tools/Publish-TunerPiApk.ps1`. This
 link is Tailscale Serve, not a public Funnel endpoint, so the phone must be
-connected to the same tailnet.
+connected to the same tailnet. The Pi serves the APK through nginx with HTTP
+range support so Android download managers can resume interrupted downloads.
 
 The script waits for the Pi, verifies the health/log APIs, the configured
 Bluetooth identity and state, and loads noVNC's touch-display page. It writes a
