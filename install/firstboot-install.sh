@@ -332,6 +332,26 @@ chown -R "${USER_NAME}:${USER_NAME}" \
   "${USER_HOME}/.config" \
   "${USER_HOME}/Desktop"
 
+# Do not mark the card provisioned unless the required runtime pieces are
+# actually present.  This is intentionally local-only; phone pairing and touch
+# calibration still require the installed hardware.
+test -x /usr/bin/crankshaft-core
+test -x /usr/bin/crankshaft-ui-slim
+test -x /usr/local/bin/tunerpi-touch
+test -f "${INSTALL_ROOT}/TunerStudioMS/TunerStudioMS.jar"
+grep -q '^commPort=/dev/microsquirt$' "${PROPS}"
+grep -q 'BMW_Wide_Touch.dash' "${PROPS}"
+systemctl is-enabled crankshaft-core.service >/dev/null
+python3 - <<'PY'
+import json
+with open('/etc/crankshaft/profiles/host_profiles.json', encoding='utf-8') as handle:
+    profile = json.load(handle)[0]
+android_auto = next(item for item in profile['devices'] if item['type'] == 'AndroidAuto')
+assert android_auto['useMock'] is False
+assert android_auto['settings']['connectionMode'] == 'wireless'
+assert android_auto['settings']['wireless.enabled'] is True
+PY
+
 touch /var/lib/pi-tuner-firstboot-complete
 sync
 systemctl reboot
