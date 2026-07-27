@@ -8,7 +8,7 @@ INSTALL_ROOT="/opt/efi-analytics"
 PROJECT_NAME="1989_BMW_325i_MicroSquirt"
 PROJECT_ROOT="${USER_HOME}/TunerStudioProjects/${PROJECT_NAME}"
 
-exec > >(tee -a /var/log/pi-tuner-firstboot.log) 2>&1
+exec > >(tee -a /var/log/pi-tuner-firstboot.log /boot/firmware/TUNERPI-PROVISION.log) 2>&1
 
 if [ ! -d "${PAYLOAD}" ]; then
   echo "Payload missing at ${PAYLOAD}"
@@ -353,5 +353,6 @@ assert android_auto['settings']['wireless.enabled'] is True
 PY
 
 touch /var/lib/pi-tuner-firstboot-complete
+systemctl disable tunerpi-provision.service tunerpi-recovery.service || true
 sync
 systemctl reboot
