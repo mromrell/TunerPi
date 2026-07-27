@@ -7,6 +7,12 @@
 
 The app deliberately uses Wi-Fi for video and files: Bluetooth is suitable for discovery/pairing but not a responsive live display.
 
+At home, the app defaults to the Pi's Tailscale address. In the car, tap
+**ANDROID AUTO** on the Pi touchscreen to activate the 2.4 GHz `TunerPi-AA`
+hotspot; then use the app's **NETWORK** button to select the hotspot address.
+The hotspot is configured as a lower-priority fallback, so it does not disrupt
+the Pi's home Wi-Fi while that network is available.
+
 The Pi provisioner starts `wayvnc` and noVNC from the logged-in desktop session. This mirrors the TunerStudio/dashboard desktop. Crankshaft Android Auto uses a direct EGLFS renderer; it may not be capturable by the desktop VNC server on every Pi/display combination. Android Auto itself remains available directly on the phone.
 
 The local TunerPi touch launcher includes a live status bar for the joined Wi-Fi

@@ -26,6 +26,16 @@ systemctl enable ssh
 rfkill unblock wifi || true
 if command -v nmcli >/dev/null 2>&1; then
   nmcli --wait 15 device wifi connect 'OldEthelsPantaloons-2.4' password '1234internet4321' || true
+  # Keep a fallback vehicle hotspot.  Its deliberately lower autoconnect
+  # priority leaves the Pi on the home Wi-Fi when available, but brings up
+  # TunerPi-AA automatically when the car is away from that network.
+  nmcli connection delete TunerPi-AA >/dev/null 2>&1 || true
+  nmcli connection add type wifi ifname wlan0 con-name TunerPi-AA ssid TunerPi-AA
+  nmcli connection modify TunerPi-AA \
+    connection.autoconnect yes connection.autoconnect-priority -999 \
+    802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel 6 \
+    ipv4.method shared ipv4.addresses 10.42.0.1/24 ipv6.method ignore \
+    wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'TunerPi-AA-325i'
 fi
 for attempt in $(seq 1 60); do
   if nmcli -t -f STATE general 2>/dev/null | grep -qx connected; then
@@ -211,6 +221,7 @@ cat > /usr/local/bin/tunerpi-mode <<'EOF'
 set -euo pipefail
 case "${1:-}" in
   android-auto)
+    sudo nmcli connection up TunerPi-AA || true
     sudo systemctl start crankshaft-core.service
     sudo systemctl start crankshaft-ui-slim-display-setup.service
     sudo systemctl start crankshaft-ui-slim.service
@@ -241,6 +252,8 @@ case "${1:-}" in
     ;;
   stop-android-auto)
     sudo systemctl stop crankshaft-ui-slim.service || true
+    sudo nmcli connection down TunerPi-AA || true
+    sudo nmcli connection up netplan-wlan0-OldEthelsPantaloons-2.4 || true
     ;;
   *)
     echo "Usage: tunerpi-mode {android-auto|tunerstudio|logs|split|stop-android-auto}" >&2

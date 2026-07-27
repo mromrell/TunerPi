@@ -43,10 +43,9 @@ import java.util.concurrent.Executors;
 /** Fold-optimized companion for a private TunerPi vehicle network. */
 public class MainActivity extends Activity {
     private static final int REQUEST_BT = 42;
-    private static final String PI_HOST = "10.42.0.1";
-    private static final String VNC_URL = "http://" + PI_HOST + ":6080/vnc.html?autoconnect=true&resize=scale";
-    private static final String LOG_API = "http://" + PI_HOST + ":8088/api/logs";
-    private static final String HEALTH_API = "http://" + PI_HOST + ":8088/api/health";
+    private static final String TAILNET_HOST = "100.98.130.40";
+    private static final String HOTSPOT_HOST = "10.42.0.1";
+    private String piHost = TAILNET_HOST;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private TextView status;
     private LinearLayout devices;
@@ -83,13 +82,14 @@ public class MainActivity extends Activity {
         brand.addView(title("TUNERPI REMOTE", 28));
         root.addView(brand);
         root.addView(subtitle("Samsung Fold companion  |  Bluetooth discovery + private Wi-Fi display", 14));
-        status = subtitle("Connect the Fold to TunerPi-AA Wi-Fi, then select a function.", 15);
+        status = subtitle("Tailnet selected. Use NETWORK to switch to TunerPi-AA hotspot in the car.", 15);
         status.setTextColor(Color.rgb(145, 202, 255));
         root.addView(status);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(isExpanded() ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         actions.setPadding(0, 26, 0, 12);
+        actions.addView(actionButton("NETWORK", "Tailnet / hotspot", this::toggleNetwork), actionParams());
         actions.addView(actionButton("CHECK PI", "Verify connection", this::checkPi), actionParams());
         actions.addView(actionButton("DISCOVER PI", "Pair over Bluetooth", this::discover), actionParams());
         actions.addView(actionButton("VIEW DISPLAY", "Live Pi touch display", this::showDisplay), actionParams());
@@ -98,7 +98,7 @@ public class MainActivity extends Activity {
 
         devices = column(0);
         root.addView(devices);
-        root.addView(subtitle("Bluetooth identifies the Pi. Display and file transfer use Wi-Fi for the bandwidth needed by live video.", 13));
+        root.addView(subtitle("Active connection: " + piHost + "  |  Bluetooth identifies the Pi. Display and file transfer use Wi-Fi for live video.", 13));
         setContentView(root);
     }
 
@@ -140,7 +140,7 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         display.setWebViewClient(new WebViewClient());
-        display.loadUrl(VNC_URL);
+        display.loadUrl(vncUrl());
         setContentView(display);
     }
 
@@ -148,7 +148,7 @@ public class MainActivity extends Activity {
         setStatus("Checking Pi connection...");
         io.execute(() -> {
             try {
-                JSONObject health = new JSONObject(readText(HEALTH_API));
+                JSONObject health = new JSONObject(readText(healthApi()));
                 JSONObject services = health.getJSONObject("services");
                 JSONObject bluetooth = health.getJSONObject("bluetooth");
                 boolean ready = "active".equals(services.optString("tunerpi-logs-api.service"))
@@ -163,11 +163,16 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void toggleNetwork() {
+        piHost = piHost.equals(TAILNET_HOST) ? HOTSPOT_HOST : TAILNET_HOST;
+        setStatus("Connection set to " + (piHost.equals(TAILNET_HOST) ? "Tailnet" : "TunerPi-AA hotspot") + ": " + piHost);
+    }
+
     private void loadLogs() {
         setStatus("Fetching ECU logs…");
         io.execute(() -> {
             try {
-                JSONArray logs = new JSONArray(readText(LOG_API));
+                JSONArray logs = new JSONArray(readText(logApi()));
                 runOnUiThread(() -> showLogs(logs));
             } catch (Exception error) {
                 runOnUiThread(() -> setStatus("Could not reach Pi logs. Join TunerPi-AA Wi-Fi and verify the Pi is running."));
@@ -200,7 +205,7 @@ public class MainActivity extends Activity {
                 File directory = new File(getCacheDir(), "downloads");
                 directory.mkdirs();
                 File file = new File(directory, name.replaceAll("[^A-Za-z0-9._-]", "_"));
-                HttpURLConnection connection = (HttpURLConnection) new URL("http://" + PI_HOST + ":8088" + url).openConnection();
+                HttpURLConnection connection = (HttpURLConnection) new URL("http://" + piHost + ":8088" + url).openConnection();
                 try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(file)) {
                     byte[] buffer = new byte[32768]; int count;
                     while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
@@ -224,6 +229,10 @@ public class MainActivity extends Activity {
             return output.toString("UTF-8");
         }
     }
+
+    private String vncUrl() { return "http://" + piHost + ":6080/vnc.html?autoconnect=true&resize=scale"; }
+    private String logApi() { return "http://" + piHost + ":8088/api/logs"; }
+    private String healthApi() { return "http://" + piHost + ":8088/api/health"; }
 
     private void setStatus(String message) { if (status != null) status.setText(message); }
     private boolean isExpanded() { return getResources().getConfiguration().screenWidthDp >= 600; }
