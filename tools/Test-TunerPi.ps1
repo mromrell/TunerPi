@@ -2,6 +2,7 @@
 param(
     [string]$PiHost = '10.42.0.1',
     [ValidateRange(15, 1800)][int]$TimeoutSeconds = 600,
+    [string]$IdentityFile = "$env:USERPROFILE\.ssh\tunerpi_ed25519",
     [string]$ReportPath = (Join-Path $PSScriptRoot '..\test-results\tunerpi-remote.json')
 )
 
@@ -39,9 +40,17 @@ if (-not $health) {
 Add-Check 'Pi health API' ($health.status -eq 'ok') "status=$($health.status)"
 Add-Check 'Log API service' ($health.services.'tunerpi-logs-api.service' -eq 'active') "state=$($health.services.'tunerpi-logs-api.service')"
 Add-Check 'Crankshaft core' ($health.services.'crankshaft-core.service' -eq 'active') "state=$($health.services.'crankshaft-core.service')"
+Add-Check 'Tailscale daemon' ($health.services.'tailscaled.service' -eq 'active') "state=$($health.services.'tailscaled.service')"
 Add-Check 'Bluetooth identity' ($health.bluetooth.alias -eq 'TunerPi BMW 325i') "alias=$($health.bluetooth.alias)"
 Add-Check 'Bluetooth discoverable' ([bool]$health.bluetooth.discoverable) "discoverable=$($health.bluetooth.discoverable)"
 Add-Check 'Bluetooth pairable' ([bool]$health.bluetooth.pairable) "pairable=$($health.bluetooth.pairable)"
+
+try {
+    $ssh = 'C:\Windows\System32\OpenSSH\ssh.exe'
+    if (-not (Test-Path -LiteralPath $IdentityFile)) { throw "SSH key not found: $IdentityFile" }
+    $remote = & $ssh -i $IdentityFile -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "tuner@$PiHost" 'sudo -n /usr/local/bin/tunerpi-selftest 127.0.0.1' 2>&1
+    Add-Check 'Key-only SSH and Pi self-test' ($LASTEXITCODE -eq 0) (($remote | Select-Object -First 1) -join '')
+} catch { Add-Check 'Key-only SSH and Pi self-test' $false $_.Exception.Message }
 
 try {
     $logs = Get-PiJson '/api/logs'

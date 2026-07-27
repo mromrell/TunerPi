@@ -23,6 +23,30 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 When both machines are on the household Wi-Fi, use `-PiHost tunerpi.local`.
 
+## Remote maintenance
+
+The provisioner creates a key-only `tuner@tunerpi.local` account with passwordless
+`sudo`, while the private key remains on this Windows computer. After first boot:
+
+```powershell
+& .\tools\Connect-TunerPi.ps1 -RemoteCommand 'sudo apt-get update'
+& .\tools\Connect-TunerPi.ps1 -RemoteCommand 'sudo reboot'
+& .\tools\Test-TunerPi.ps1 -PiHost tunerpi.local
+```
+
+On the TunerPi-AA hotspot, use `-PiHost 10.42.0.1` instead. SSH password login
+and root login are disabled; the generated key is required.
+
+Tailscale is installed and running but must be authorized into the desired
+tailnet once. From the local network, run:
+
+```powershell
+& .\tools\Connect-TunerPi.ps1 -RemoteCommand 'sudo tunerpi-tailscale-connect'
+```
+
+Open the one-time URL that Tailscale prints, approve the device, then connect
+from any tailnet device using its Tailscale IP or the approved machine name.
+
 The script waits for the Pi, verifies the health/log APIs, the configured
 Bluetooth identity and state, and loads noVNC's touch-display page. It writes a
 machine-readable report under `test-results/`. `Test-TunerPiBluetooth.ps1`

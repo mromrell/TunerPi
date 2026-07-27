@@ -42,7 +42,9 @@ done
 # (Debian/Trixie arm64).  This is the Android Auto runtime used by TunerPi.
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  ca-certificates curl gpg python3-tk wmctrl
+  ca-certificates curl gpg python3-tk wmctrl openssh-server avahi-daemon libnss-mdns
+curl -fsSL https://tailscale.com/install.sh | sh
+systemctl enable --now tailscaled
 curl -fsSL https://apt.opencardev.org/opencardev.gpg.key \
   | gpg --dearmor --yes --output /usr/share/keyrings/opencardev-archive-keyring.gpg
 ARCH="$(dpkg --print-architecture)"
@@ -63,6 +65,36 @@ systemctl disable crankshaft-ui-slim.service crankshaft-ui-slim-display-setup.se
 
 install -d -m 0755 "${INSTALL_ROOT}" "${USER_HOME}/TunerStudioProjects"
 install -d -o "${USER_NAME}" -g "${USER_NAME}" "${USER_HOME}/Desktop"
+
+# Remote administration is key-only.  The private half stays on the Windows
+# workstation; this payload contains only its public key.
+REMOTE_KEYS="${PAYLOAD}/tunerpi_admin_authorized_keys"
+test -s "${REMOTE_KEYS}"
+install -d -m 0700 -o "${USER_NAME}" -g "${USER_NAME}" "${USER_HOME}/.ssh"
+install -m 0600 -o "${USER_NAME}" -g "${USER_NAME}" "${REMOTE_KEYS}" "${USER_HOME}/.ssh/authorized_keys"
+cat > /etc/ssh/sshd_config.d/90-tunerpi-remote.conf <<'EOF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+PubkeyAuthentication yes
+AllowUsers tuner
+EOF
+cat > /etc/sudoers.d/90-tunerpi-remote <<'EOF'
+tuner ALL=(ALL) NOPASSWD: ALL
+EOF
+chmod 0440 /etc/sudoers.d/90-tunerpi-remote
+visudo -cf /etc/sudoers.d/90-tunerpi-remote
+sshd -t
+systemctl enable --now ssh avahi-daemon
+systemctl restart ssh
+
+cat > /usr/local/bin/tunerpi-tailscale-connect <<'EOF'
+#!/bin/bash
+# Starts the one-time Tailscale authorization flow without weakening SSH.
+set -euo pipefail
+exec tailscale up --hostname=tunerpi
+EOF
+chmod 0755 /usr/local/bin/tunerpi-tailscale-connect
 
 tar -xzf "${PAYLOAD}/TunerStudioMS_v3.3.01.tar.gz" -C "${INSTALL_ROOT}"
 tar -xzf "${PAYLOAD}/OpenJDK11U-jre_aarch64_linux_hotspot_11.0.32_9.tar.gz" -C "${INSTALL_ROOT}"
@@ -250,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
                 'status': 'ok',
                 'timestamp': datetime.now(timezone.utc).isoformat(),
                 'log_directory': str(LOG_DIR),
-                'services': {name: service_state(name) for name in ('tunerpi-logs-api.service', 'crankshaft-core.service')},
+                'services': {name: service_state(name) for name in ('tunerpi-logs-api.service', 'crankshaft-core.service', 'tailscaled.service')},
                 'bluetooth': {'alias': next((line.split(':', 1)[1].strip() for line in bt.splitlines() if 'Alias:' in line), 'unknown'), 'discoverable': 'Discoverable: yes' in bt, 'pairable': 'Pairable: yes' in bt}
             })
         if path == '/api/logs':
@@ -280,7 +312,7 @@ cat > /usr/local/bin/tunerpi-selftest <<'EOF'
 # Non-destructive local validation for the Android companion stack.
 set -euo pipefail
 host="${1:-127.0.0.1}"
-for service in tunerpi-logs-api.service crankshaft-core.service; do
+for service in tunerpi-logs-api.service crankshaft-core.service tailscaled.service; do
   printf '%s: ' "$service"
   systemctl is-active "$service"
 done
@@ -464,6 +496,9 @@ test -f "${INSTALL_ROOT}/TunerStudioMS/TunerStudioMS.jar"
 grep -q '^commPort=/dev/microsquirt$' "${PROPS}"
 grep -q 'BMW_Wide_Touch.dash' "${PROPS}"
 systemctl is-enabled crankshaft-core.service >/dev/null
+systemctl is-enabled ssh avahi-daemon tailscaled >/dev/null
+test -s "${USER_HOME}/.ssh/authorized_keys"
+sshd -t
 python3 - <<'PY'
 import json
 with open('/etc/crankshaft/profiles/host_profiles.json', encoding='utf-8') as handle:
