@@ -13,6 +13,8 @@ This fork adds the Raspberry Pi 4 integration for a BMW 325i MicroSquirt:
 
 TunerStudio retains its automatic USB launch and automatic logging configuration. It can log while Android Auto is shown.
 
+The 6x2-inch touch layout makes **Gauges** and **Android Auto** the two primary actions. Repeated touch input is idempotent: the launcher does not start a second TunerStudio instance when one is already logging.
+
 ## First boot
 
 The SD-card provisioner installs `crankshaft-core`, `crankshaft-ui-slim`, and Python Tk on the Pi. It verifies OpenCarDev's signing key before installing packages. The wireless hotspot is:

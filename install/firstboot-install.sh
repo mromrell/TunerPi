@@ -126,7 +126,7 @@ install -d -m 0755 /etc/crankshaft/profiles
 cat > /etc/crankshaft/profiles/host_profiles.json <<'EOF'
 [
   {
-    "id": "{d3eb4bca-325i-4e89-bmw-tunerpi0001}",
+    "id": "{d3eb4bca-3251-4e89-b001-000000000001}",
     "name": "BMW TunerPi Wireless Android Auto",
     "description": "Wireless Android Auto plus BMW MicroSquirt logging",
     "isActive": true,
@@ -180,7 +180,10 @@ case "${1:-}" in
     ;;
   tunerstudio)
     sudo systemctl stop crankshaft-ui-slim.service || true
-    /usr/local/bin/start-bmw-tunerstudio &
+    if ! pgrep -f '[T]unerStudioMS.jar' >/dev/null; then
+      /usr/local/bin/start-bmw-tunerstudio &
+    fi
+    wmctrl -a 'TunerStudio' || true
     ;;
   logs)
     xdg-open /home/tuner/TunerStudioProjects/1989_BMW_325i_MicroSquirt/DataLogs
@@ -189,7 +192,9 @@ case "${1:-}" in
     # Best-effort XWayland/X11 split mode.  The regular AA mode stays the
     # reliable full-screen option; this mode is intentionally recoverable.
     sudo systemctl stop crankshaft-ui-slim.service || true
-    /usr/local/bin/start-bmw-tunerstudio &
+    if ! pgrep -f '[T]unerStudioMS.jar' >/dev/null; then
+      /usr/local/bin/start-bmw-tunerstudio &
+    fi
     sleep 3
     sudo -u tuner env DISPLAY=:0 XAUTHORITY=/home/tuner/.Xauthority \
       QT_QPA_PLATFORM=xcb /usr/bin/crankshaft-ui-slim &
@@ -211,7 +216,6 @@ chmod 0755 /usr/local/bin/tunerpi-mode
 cat > /usr/local/bin/tunerpi-touch <<'EOF'
 #!/usr/bin/env python3
 """Touch-first launcher for the BMW TunerPi display."""
-import os
 import subprocess
 import tkinter as tk
 
@@ -230,8 +234,8 @@ root.bind('<Escape>', lambda _event: root.attributes('-fullscreen', False))
 
 frame = tk.Frame(root, bg=BG, padx=28, pady=18)
 frame.pack(fill='both', expand=True)
-tk.Label(frame, text='TunerPi  •  BMW 325i', font=('DejaVu Sans', 24, 'bold'), bg=BG, fg=TEXT).pack(anchor='w')
-tk.Label(frame, text='Wireless Android Auto + MicroSquirt logging', font=('DejaVu Sans', 12), bg=BG, fg=MUTED).pack(anchor='w', pady=(0, 14))
+tk.Label(frame, text='TUNERPI  |  BMW 325i', font=('DejaVu Sans', 24, 'bold'), bg=BG, fg=TEXT).pack(anchor='w')
+tk.Label(frame, text='GAUGES DEFAULT  |  Android Auto wireless  |  ECU logging armed', font=('DejaVu Sans', 11, 'bold'), bg=BG, fg=MUTED).pack(anchor='w', pady=(0, 12))
 
 buttons = tk.Frame(frame, bg=BG)
 buttons.pack(fill='both', expand=True)
@@ -244,12 +248,12 @@ def tile(label, detail, color, mode, row, col):
     tk.Button(box, text=label, font=('DejaVu Sans', 18, 'bold'), bg=color, fg='white', relief='flat', command=lambda: run(mode)).pack(fill='both', expand=True, padx=8, pady=(8, 2))
     tk.Label(box, text=detail, font=('DejaVu Sans', 10), bg=PANEL, fg=MUTED, wraplength=260).pack(padx=8, pady=(2, 8))
 
-tile('ANDROID AUTO', 'Wireless projection • Maps • Spotify', BLUE, 'android-auto', 0, 0)
-tile('TUNERSTUDIO', 'Wide touch dash • ECU metrics • logging', AMBER, 'tunerstudio', 0, 1)
-tile('OPEN LOGS', 'Review and copy MicroSquirt data logs', '#435466', 'logs', 0, 2)
-tile('RETURN FROM AA', 'Close Android Auto and return here', '#435466', 'stop-android-auto', 1, 0)
-tile('SPLIT VIEW', 'Experimental: Android Auto left, TunerStudio right', '#435466', 'split', 1, 1)
-tk.Label(buttons, text='Android Auto connects through the TunerPi-AA hotspot.\nTunerStudio continues to log whenever its USB ECU cable is present.', font=('DejaVu Sans', 12), justify='left', bg=BG, fg=TEXT).grid(row=1, column=2, sticky='nsew', padx=18, pady=16)
+tile('GAUGES', 'BMW MicroSquirt live dash and automatic logging', AMBER, 'tunerstudio', 0, 0)
+tile('ANDROID AUTO', 'Wireless Maps, Spotify, calls, and apps', BLUE, 'android-auto', 0, 1)
+tile('LOGS', 'Review and copy ECU data logs', '#435466', 'logs', 0, 2)
+tile('EXIT ANDROID AUTO', 'Return to this launcher', '#435466', 'stop-android-auto', 1, 0)
+tile('SPLIT VIEW', 'Experimental: AA left, gauges right', '#435466', 'split', 1, 1)
+tk.Label(buttons, text='ECU USB detected: TunerStudio launches automatically.\nAndroid Auto hotspot: TunerPi-AA', font=('DejaVu Sans', 12), justify='left', bg=BG, fg=TEXT).grid(row=1, column=2, sticky='nsew', padx=18, pady=16)
 
 root.mainloop()
 EOF
