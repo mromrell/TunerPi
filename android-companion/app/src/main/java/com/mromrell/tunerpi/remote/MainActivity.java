@@ -20,6 +20,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -73,7 +74,13 @@ public class MainActivity extends Activity {
     private void showHome() {
         LinearLayout root = column(18);
         root.setBackgroundColor(Color.rgb(13, 17, 23));
-        root.addView(title("TUNERPI REMOTE", 28));
+        LinearLayout brand = new LinearLayout(this);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.tunerpi_roundel);
+        brand.addView(logo, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        brand.addView(title("TUNERPI REMOTE", 28));
+        root.addView(brand);
         root.addView(subtitle("Samsung Fold companion  |  Bluetooth discovery + private Wi-Fi display", 14));
         status = subtitle("Connect the Fold to TunerPi-AA Wi-Fi, then select a function.", 15);
         status.setTextColor(Color.rgb(145, 202, 255));
@@ -82,9 +89,9 @@ public class MainActivity extends Activity {
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(isExpanded() ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         actions.setPadding(0, 26, 0, 12);
-        actions.addView(actionButton("DISCOVER PI", "Pair over Bluetooth", this::discover), weighted());
-        actions.addView(actionButton("VIEW DISPLAY", "Live Pi touch display", this::showDisplay), weighted());
-        actions.addView(actionButton("ECU LOGS", "Download and share files", this::loadLogs), weighted());
+        actions.addView(actionButton("DISCOVER PI", "Pair over Bluetooth", this::discover), actionParams());
+        actions.addView(actionButton("VIEW DISPLAY", "Live Pi touch display", this::showDisplay), actionParams());
+        actions.addView(actionButton("ECU LOGS", "Download and share files", this::loadLogs), actionParams());
         root.addView(actions);
 
         devices = column(0);
@@ -203,5 +210,10 @@ public class MainActivity extends Activity {
     private TextView title(String value, int size) { TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(Color.WHITE); view.setPadding(0, 8, 0, 8); return view; }
     private TextView subtitle(String value, int size) { TextView view = title(value, size); view.setTextColor(Color.rgb(177, 190, 205)); return view; }
     private Button actionButton(String label, String detail, Runnable action) { Button button = new Button(this); button.setAllCaps(false); button.setText(label + "\n" + detail); button.setTextSize(16); button.setGravity(Gravity.CENTER); button.setOnClickListener(v -> action.run()); button.setPadding(12, 24, 12, 24); return button; }
-    private LinearLayout.LayoutParams weighted() { return new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f); }
+    private int dp(int value) { return (int) (value * getResources().getDisplayMetrics().density + 0.5f); }
+    private LinearLayout.LayoutParams actionParams() {
+        return isExpanded()
+                ? new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                : new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    }
 }

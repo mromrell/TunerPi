@@ -444,6 +444,6 @@ assert android_auto['settings']['wireless.enabled'] is True
 PY
 
 touch /var/lib/pi-tuner-firstboot-complete
-systemctl disable tunerpi-provision.service tunerpi-recovery.service || true
+systemctl disable tunerpi-provision.service tunerpi-recovery.service tunerpi-recovery-v2.service || true
 sync
 systemctl reboot
