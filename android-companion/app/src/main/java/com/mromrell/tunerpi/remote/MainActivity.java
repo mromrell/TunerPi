@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
     private static final String PI_HOST = "10.42.0.1";
     private static final String VNC_URL = "http://" + PI_HOST + ":6080/vnc.html?autoconnect=true&resize=scale";
     private static final String LOG_API = "http://" + PI_HOST + ":8088/api/logs";
+    private static final String HEALTH_API = "http://" + PI_HOST + ":8088/api/health";
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private TextView status;
     private LinearLayout devices;
@@ -89,6 +90,7 @@ public class MainActivity extends Activity {
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(isExpanded() ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         actions.setPadding(0, 26, 0, 12);
+        actions.addView(actionButton("CHECK PI", "Verify connection", this::checkPi), actionParams());
         actions.addView(actionButton("DISCOVER PI", "Pair over Bluetooth", this::discover), actionParams());
         actions.addView(actionButton("VIEW DISPLAY", "Live Pi touch display", this::showDisplay), actionParams());
         actions.addView(actionButton("ECU LOGS", "Download and share files", this::loadLogs), actionParams());
@@ -140,6 +142,25 @@ public class MainActivity extends Activity {
         display.setWebViewClient(new WebViewClient());
         display.loadUrl(VNC_URL);
         setContentView(display);
+    }
+
+    private void checkPi() {
+        setStatus("Checking Pi connection...");
+        io.execute(() -> {
+            try {
+                JSONObject health = new JSONObject(readText(HEALTH_API));
+                JSONObject services = health.getJSONObject("services");
+                JSONObject bluetooth = health.getJSONObject("bluetooth");
+                boolean ready = "active".equals(services.optString("tunerpi-logs-api.service"))
+                        && "active".equals(services.optString("crankshaft-core.service"));
+                String message = ready
+                        ? "Pi ready: " + bluetooth.optString("alias") + "."
+                        : "Pi reachable, but setup is still finishing. Try again shortly.";
+                runOnUiThread(() -> setStatus(message));
+            } catch (Exception error) {
+                runOnUiThread(() -> setStatus("Pi not reachable. Join TunerPi-AA Wi-Fi, then retry."));
+            }
+        });
     }
 
     private void loadLogs() {

@@ -16,6 +16,7 @@ if [ ! -d "${PAYLOAD}" ]; then
 fi
 
 raspi-config nonint do_boot_behaviour B4
+hostnamectl set-hostname tunerpi
 systemctl enable ssh
 
 # Raspberry Pi OS uses NetworkManager.  The original boot image does not
@@ -225,6 +226,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 import json
 import mimetypes
+import subprocess
+from datetime import datetime, timezone
 
 LOG_DIR = Path('/home/tuner/TunerStudioProjects/1989_BMW_325i_MicroSquirt/DataLogs')
 ALLOWED = {'.msl', '.mlg', '.csv'}
@@ -237,6 +240,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == '/api/health':
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            def service_state(name):
+                result = subprocess.run(['systemctl', 'is-active', name], text=True, capture_output=True, timeout=3)
+                return result.stdout.strip() or 'unknown'
+            bt = subprocess.run(['bluetoothctl', 'show'], text=True, capture_output=True, timeout=3).stdout
+            return self.send_json({
+                'status': 'ok',
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'log_directory': str(LOG_DIR),
+                'services': {name: service_state(name) for name in ('tunerpi-logs-api.service', 'crankshaft-core.service')},
+                'bluetooth': {'alias': next((line.split(':', 1)[1].strip() for line in bt.splitlines() if 'Alias:' in line), 'unknown'), 'discoverable': 'Discoverable: yes' in bt, 'pairable': 'Pairable: yes' in bt}
+            })
         if path == '/api/logs':
             LOG_DIR.mkdir(parents=True, exist_ok=True)
             items = []
@@ -258,6 +274,21 @@ class Handler(BaseHTTPRequestHandler):
 ThreadingHTTPServer(('0.0.0.0', 8088), Handler).serve_forever()
 EOF
 chmod 0755 /usr/local/bin/tunerpi-logs-api
+
+cat > /usr/local/bin/tunerpi-selftest <<'EOF'
+#!/bin/bash
+# Non-destructive local validation for the Android companion stack.
+set -euo pipefail
+host="${1:-127.0.0.1}"
+for service in tunerpi-logs-api.service crankshaft-core.service; do
+  printf '%s: ' "$service"
+  systemctl is-active "$service"
+done
+curl --fail --silent --show-error --connect-timeout 5 "http://${host}:8088/api/health" | python3 -m json.tool
+curl --fail --silent --show-error --connect-timeout 5 "http://${host}:8088/api/logs" | python3 -m json.tool
+if command -v ss >/dev/null; then ss -ltn | grep -E ':(5900|6080|8088)\\b' || true; fi
+EOF
+chmod 0755 /usr/local/bin/tunerpi-selftest
 
 cat > /etc/systemd/system/tunerpi-logs-api.service <<'EOF'
 [Unit]
