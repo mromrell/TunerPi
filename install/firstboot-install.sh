@@ -16,6 +16,10 @@ if [ ! -d "${PAYLOAD}" ]; then
 fi
 
 raspi-config nonint do_boot_behaviour B4
+# Safe prerequisites for GPIO-connected touch panels.  The panel-specific
+# overlay is intentionally installed separately after its controller is known.
+raspi-config nonint do_spi 0
+raspi-config nonint do_i2c 0
 hostnamectl set-hostname tunerpi
 systemctl enable ssh
 
