@@ -278,6 +278,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 import json
 import mimetypes
+import glob
+import os
 import subprocess
 from datetime import datetime, timezone
 
@@ -433,6 +435,9 @@ import tkinter as tk
 BG, PANEL, BLUE, AMBER, TEXT, MUTED = '#10151c', '#1c2633', '#1f78d1', '#d98922', '#eef5ff', '#9caec2'
 
 def run(mode):
+    if mode == 'logs':
+        show_logs()
+        return
     subprocess.Popen(['/usr/local/bin/tunerpi-mode', mode], start_new_session=True)
     if mode == 'android-auto':
         root.after(1500, root.iconify)
@@ -486,6 +491,62 @@ def update_connection():
     root.after(2000, update_connection)
 
 update_connection()
+
+logs_view = None
+
+def show_home():
+    global logs_view
+    if logs_view is not None:
+        logs_view.destroy()
+        logs_view = None
+    frame.pack(fill='both', expand=True)
+
+def log_files():
+    base = '/home/tuner/TunerStudioProjects/1989_BMW_325i_MicroSquirt/DataLogs'
+    return sorted((p for p in glob.glob(os.path.join(base, '*')) if os.path.isfile(p)), key=os.path.getmtime, reverse=True)
+
+def show_log(path):
+    for child in logs_view.winfo_children():
+        child.destroy()
+    nav = tk.Frame(logs_view, bg=BG)
+    nav.pack(fill='x', padx=8, pady=6)
+    tk.Button(nav, text='← MENU', font=('DejaVu Sans', 10, 'bold'), bg=BLUE, fg='white', relief='flat', command=show_home).pack(side='left')
+    tk.Button(nav, text='← LOGS', font=('DejaVu Sans', 10, 'bold'), bg='#435466', fg='white', relief='flat', command=show_logs).pack(side='left', padx=6)
+    tk.Label(nav, text=os.path.basename(path), font=('DejaVu Sans', 9, 'bold'), bg=BG, fg=TEXT).pack(side='left', padx=4)
+    text = tk.Text(logs_view, bg=PANEL, fg=TEXT, insertbackground=TEXT, relief='flat', wrap='none', font=('DejaVu Sans Mono', 8 if compact else 10))
+    scroll = tk.Scrollbar(logs_view, command=text.yview)
+    text.configure(yscrollcommand=scroll.set)
+    scroll.pack(side='right', fill='y', pady=(0, 6))
+    text.pack(fill='both', expand=True, padx=8, pady=(0, 6))
+    try:
+        with open(path, 'r', errors='replace') as source:
+            lines = source.readlines()[-400:]
+        text.insert('1.0', ''.join(lines) or '(empty log)')
+    except Exception as exc:
+        text.insert('1.0', f'Unable to read log: {exc}')
+    text.configure(state='disabled')
+
+def show_logs():
+    global logs_view
+    frame.pack_forget()
+    if logs_view is not None:
+        logs_view.destroy()
+    logs_view = tk.Frame(root, bg=BG)
+    logs_view.pack(fill='both', expand=True)
+    nav = tk.Frame(logs_view, bg=BG)
+    nav.pack(fill='x', padx=8, pady=6)
+    tk.Button(nav, text='← MENU', font=('DejaVu Sans', 10, 'bold'), bg=BLUE, fg='white', relief='flat', command=show_home).pack(side='left')
+    tk.Label(nav, text='ECU LOGS', font=('DejaVu Sans', 14 if compact else 20, 'bold'), bg=BG, fg=TEXT).pack(side='left', padx=10)
+    files = log_files()
+    listing = tk.Frame(logs_view, bg=BG)
+    listing.pack(fill='both', expand=True, padx=8, pady=(0, 8))
+    if not files:
+        tk.Label(listing, text='No ECU logs yet. Logging will add files here automatically.', bg=BG, fg=MUTED, font=('DejaVu Sans', 10), wraplength=430).pack(expand=True)
+        return
+    for path in files[:8]:
+        stamp = os.path.getmtime(path)
+        label = f'{os.path.basename(path)}  •  {int(os.path.getsize(path) / 1024)} KB'
+        tk.Button(listing, text=label, anchor='w', justify='left', font=('DejaVu Sans', 9 if compact else 12, 'bold'), bg=PANEL, fg=TEXT, activebackground=BLUE, activeforeground='white', relief='flat', command=lambda p=path: show_log(p)).pack(fill='x', pady=2)
 
 buttons = tk.Frame(frame, bg=BG)
 buttons.pack(fill='both', expand=True)
