@@ -278,8 +278,17 @@ case "${1:-}" in
     sudo nmcli connection down TunerPi-AA || true
     sudo nmcli connection up netplan-wlan0-OldEthelsPantaloons-2.4 || true
     ;;
+  menu)
+    sudo systemctl stop crankshaft-ui-slim.service || true
+    sudo systemctl stop crankshaft-core.service || true
+    pkill -f '[T]unerStudioMS.jar' || true
+    sudo nmcli connection down TunerPi-AA || true
+    sudo nmcli connection up netplan-wlan0-OldEthelsPantaloons-2.4 || true
+    sudo -u tuner env DISPLAY=:1 xdotool search --name '^TunerPi$' windowraise || true
+    sudo -u tuner env DISPLAY=:1 xdotool key --clearmodifiers ctrl+Escape || true
+    ;;
   *)
-    echo "Usage: tunerpi-mode {android-auto|tunerstudio|logs|split|stop-android-auto}" >&2
+    echo "Usage: tunerpi-mode {android-auto|tunerstudio|logs|split|stop-android-auto|menu}" >&2
     exit 64
     ;;
 esac
@@ -576,6 +585,15 @@ def show_logs():
         label = f'{os.path.basename(path)}  •  {int(os.path.getsize(path) / 1024)} KB'
         tk.Button(listing, text=label, anchor='w', justify='left', font=('DejaVu Sans', 9 if compact else 12, 'bold'), bg=PANEL, fg=TEXT, activebackground=BLUE, activeforeground='white', relief='flat', command=lambda p=path: show_log(p)).pack(fill='x', pady=2)
 
+def raise_menu(_event=None):
+    show_home()
+    root.deiconify()
+    root.lift()
+    root.focus_force()
+
+root.bind('<Control-Escape>', raise_menu)
+root.bind('<F7>', lambda _event: show_logs())
+
 buttons = tk.Frame(frame, bg=BG)
 buttons.pack(fill='both', expand=True)
 columns, rows = (2, 3) if compact else (3, 2)
@@ -606,6 +624,74 @@ else:
 root.mainloop()
 EOF
 chmod 0755 /usr/local/bin/tunerpi-touch
+
+cat > /usr/local/bin/tunerpi-nav <<'EOF'
+#!/usr/bin/env python3
+"""Persistent lower-corner navigation for the 52Pi dashboard."""
+import subprocess
+import tkinter as tk
+
+DISPLAY = ':1'
+BG, BLUE, PANEL, TEXT = '#10151c', '#1f78d1', '#1c2633', '#eef5ff'
+root = tk.Tk()
+root.overrideredirect(True)
+root.attributes('-topmost', True)
+root.configure(bg=BLUE)
+root.geometry('54x30+426+286')
+
+panel = None
+
+def xdotool(*args):
+    subprocess.run(['xdotool', *args], env={**__import__('os').environ, 'DISPLAY': DISPLAY}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def dashboard(logs=False):
+    global panel
+    subprocess.Popen(['sudo', '/usr/local/bin/tunerpi-mode', 'menu'])
+    root.after(750, lambda: xdotool('search', '--name', '^TunerPi$', 'windowraise'))
+    root.after(900, lambda: xdotool('key', '--clearmodifiers', 'ctrl+Escape'))
+    if logs:
+        root.after(1200, lambda: xdotool('key', '--clearmodifiers', 'F7'))
+    close_panel()
+
+def launch(mode):
+    subprocess.Popen(['sudo', '/usr/local/bin/tunerpi-mode', mode])
+    close_panel()
+
+def close_panel():
+    global panel
+    if panel is not None:
+        panel.destroy()
+        panel = None
+
+def toggle():
+    global panel
+    if panel is not None:
+        close_panel()
+        return
+    panel = tk.Toplevel(root)
+    panel.overrideredirect(True)
+    panel.attributes('-topmost', True)
+    panel.configure(bg=BG)
+    panel.geometry('178x178+294+104')
+    for label, command, color in (
+        ('DASHBOARD', lambda: dashboard(False), BLUE),
+        ('GAUGES', lambda: launch('tunerstudio'), '#d98922'),
+        ('ANDROID AUTO', lambda: launch('android-auto'), BLUE),
+        ('LOGS', lambda: dashboard(True), '#435466'),
+    ):
+        tk.Button(panel, text=label, command=command, font=('DejaVu Sans', 10, 'bold'), bg=color, fg='white', relief='flat').pack(fill='x', padx=7, pady=5, ipady=5)
+
+tk.Button(root, text='☰', command=toggle, font=('DejaVu Sans', 15, 'bold'), bg=BLUE, fg='white', relief='flat').pack(fill='both', expand=True)
+
+def keep_visible():
+    root.lift()
+    if panel is not None: panel.lift()
+    root.after(800, keep_visible)
+
+keep_visible()
+root.mainloop()
+EOF
+chmod 0755 /usr/local/bin/tunerpi-nav
 
 cat > "${USER_HOME}/.config/autostart/tunerpi-touch.desktop" <<'EOF'
 [Desktop Entry]
