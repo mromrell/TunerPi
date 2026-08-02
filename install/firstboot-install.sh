@@ -56,7 +56,7 @@ done
 # (Debian/Trixie arm64).  This is the Android Auto runtime used by TunerPi.
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  ca-certificates curl gpg python3-tk wmctrl openssh-server avahi-daemon libnss-mdns
+  ca-certificates curl gpg python3-tk wmctrl openssh-server avahi-daemon libnss-mdns xserver-xorg-input-evdev
 curl -fsSL https://tailscale.com/install.sh | sh
 systemctl enable --now tailscaled
 curl -fsSL https://apt.opencardev.org/opencardev.gpg.key \
@@ -278,9 +278,6 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 import json
 import mimetypes
-import glob
-import os
-import subprocess
 from datetime import datetime, timezone
 
 LOG_DIR = Path('/home/tuner/TunerStudioProjects/1989_BMW_325i_MicroSquirt/DataLogs')
@@ -426,9 +423,24 @@ WantedBy=multi-user.target
 EOF
 systemctl enable --now tunerpi-bluetooth.service
 
+# The 52Pi Display-G rotates the 480x320 framebuffer by 90 degrees.  This
+# InputClass is inert on other hardware and calibrates its XPT2046 controller.
+install -d -m 0755 /etc/X11/xorg.conf.d
+cat > /etc/X11/xorg.conf.d/99-tunerpi-xpt2046.conf <<'EOF'
+Section "InputClass"
+    Identifier "TunerPi 52Pi Display-G calibrated touch"
+    MatchProduct "ADS7846 Touchscreen"
+    Driver "evdev"
+    Option "Calibration" "3936 227 268 3880"
+    Option "SwapAxes" "1"
+EndSection
+EOF
+
 cat > /usr/local/bin/tunerpi-touch <<'EOF'
 #!/usr/bin/env python3
 """Touch-first launcher for the BMW TunerPi display."""
+import glob
+import os
 import subprocess
 import tkinter as tk
 
