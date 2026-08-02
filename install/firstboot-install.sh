@@ -436,12 +436,20 @@ root.configure(bg=BG)
 root.attributes('-fullscreen', True)
 root.bind('<Escape>', lambda _event: root.attributes('-fullscreen', False))
 
-frame = tk.Frame(root, bg=BG, padx=28, pady=18)
+screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
+# GPIO 3.5-inch panels are normally 480x320.  Keep this launcher genuinely
+# touchable there while retaining the richer three-column desktop layout.
+compact = screen_w <= 800 or screen_h <= 500
+pad_x, pad_y = (10, 7) if compact else (28, 18)
+title_size, sub_size, status_size = (16, 8, 8) if compact else (24, 11, 11)
+button_size, detail_size = (12, 7) if compact else (18, 10)
+frame = tk.Frame(root, bg=BG, padx=pad_x, pady=pad_y)
 frame.pack(fill='both', expand=True)
-tk.Label(frame, text='TUNERPI  |  BMW 325i', font=('DejaVu Sans', 24, 'bold'), bg=BG, fg=TEXT).pack(anchor='w')
-tk.Label(frame, text='GAUGES DEFAULT  |  Android Auto wireless  |  ECU logging armed', font=('DejaVu Sans', 11, 'bold'), bg=BG, fg=MUTED).pack(anchor='w', pady=(0, 12))
-connection = tk.Label(frame, font=('DejaVu Sans', 11, 'bold'), bg=PANEL, fg=TEXT, padx=12, pady=8, anchor='w')
-connection.pack(fill='x', pady=(0, 10))
+tk.Label(frame, text='TUNERPI  |  BMW 325i', font=('DejaVu Sans', title_size, 'bold'), bg=BG, fg=TEXT).pack(anchor='w')
+if not compact:
+    tk.Label(frame, text='GAUGES DEFAULT  |  Android Auto wireless  |  ECU logging armed', font=('DejaVu Sans', sub_size, 'bold'), bg=BG, fg=MUTED).pack(anchor='w', pady=(0, 12))
+connection = tk.Label(frame, font=('DejaVu Sans', status_size, 'bold'), bg=PANEL, fg=TEXT, padx=8, pady=5, anchor='w')
+connection.pack(fill='x', pady=(0, 5 if compact else 10))
 
 def command(*args):
     try:
@@ -469,21 +477,30 @@ update_connection()
 
 buttons = tk.Frame(frame, bg=BG)
 buttons.pack(fill='both', expand=True)
-for col in range(3): buttons.grid_columnconfigure(col, weight=1)
-for row in range(2): buttons.grid_rowconfigure(row, weight=1)
+columns, rows = (2, 3) if compact else (3, 2)
+for col in range(columns): buttons.grid_columnconfigure(col, weight=1)
+for row in range(rows): buttons.grid_rowconfigure(row, weight=1)
 
 def tile(label, detail, color, mode, row, col):
     box = tk.Frame(buttons, bg=PANEL, highlightbackground=color, highlightthickness=2)
-    box.grid(row=row, column=col, sticky='nsew', padx=7, pady=7)
-    tk.Button(box, text=label, font=('DejaVu Sans', 18, 'bold'), bg=color, fg='white', relief='flat', command=lambda: run(mode)).pack(fill='both', expand=True, padx=8, pady=(8, 2))
-    tk.Label(box, text=detail, font=('DejaVu Sans', 10), bg=PANEL, fg=MUTED, wraplength=260).pack(padx=8, pady=(2, 8))
+    box.grid(row=row, column=col, sticky='nsew', padx=3 if compact else 7, pady=3 if compact else 7)
+    tk.Button(box, text=label, font=('DejaVu Sans', button_size, 'bold'), bg=color, fg='white', relief='flat', command=lambda: run(mode)).pack(fill='both', expand=True, padx=4 if compact else 8, pady=(4 if compact else 8, 1 if compact else 2))
+    if not compact:
+        tk.Label(box, text=detail, font=('DejaVu Sans', detail_size), bg=PANEL, fg=MUTED, wraplength=260).pack(padx=8, pady=(2, 8))
 
-tile('GAUGES', 'BMW MicroSquirt live dash and automatic logging', AMBER, 'tunerstudio', 0, 0)
-tile('ANDROID AUTO', 'Wireless Maps, Spotify, calls, and apps', BLUE, 'android-auto', 0, 1)
-tile('LOGS', 'Review and copy ECU data logs', '#435466', 'logs', 0, 2)
-tile('EXIT ANDROID AUTO', 'Return to this launcher', '#435466', 'stop-android-auto', 1, 0)
-tile('SPLIT VIEW', 'Experimental: AA left, gauges right', '#435466', 'split', 1, 1)
-tk.Label(buttons, text='ECU USB detected: TunerStudio launches automatically.\nAndroid Auto hotspot: TunerPi-AA', font=('DejaVu Sans', 12), justify='left', bg=BG, fg=TEXT).grid(row=1, column=2, sticky='nsew', padx=18, pady=16)
+if compact:
+    tile('GAUGES', '', AMBER, 'tunerstudio', 0, 0)
+    tile('ANDROID AUTO', '', BLUE, 'android-auto', 0, 1)
+    tile('LOGS', '', '#435466', 'logs', 1, 0)
+    tile('EXIT AA', '', '#435466', 'stop-android-auto', 1, 1)
+    tk.Label(buttons, text='ECU logging armed  |  Hotspot: TunerPi-AA', font=('DejaVu Sans', 8, 'bold'), justify='left', bg=BG, fg=TEXT).grid(row=2, column=0, columnspan=2, sticky='nsew', padx=4, pady=4)
+else:
+    tile('GAUGES', 'BMW MicroSquirt live dash and automatic logging', AMBER, 'tunerstudio', 0, 0)
+    tile('ANDROID AUTO', 'Wireless Maps, Spotify, calls, and apps', BLUE, 'android-auto', 0, 1)
+    tile('LOGS', 'Review and copy ECU data logs', '#435466', 'logs', 0, 2)
+    tile('EXIT ANDROID AUTO', 'Return to this launcher', '#435466', 'stop-android-auto', 1, 0)
+    tile('SPLIT VIEW', 'Experimental: AA left, gauges right', '#435466', 'split', 1, 1)
+    tk.Label(buttons, text='ECU USB detected: TunerStudio launches automatically.\nAndroid Auto hotspot: TunerPi-AA', font=('DejaVu Sans', 12), justify='left', bg=BG, fg=TEXT).grid(row=1, column=2, sticky='nsew', padx=18, pady=16)
 
 root.mainloop()
 EOF
