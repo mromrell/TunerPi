@@ -78,6 +78,21 @@ systemctl disable crankshaft-core.service || true
 # The UI is started from the touch launcher.  Running it automatically would
 # take exclusive control of the display and hide the TunerStudio controls.
 systemctl disable crankshaft-ui-slim.service crankshaft-ui-slim-display-setup.service || true
+# On the 52Pi SPI panel the visible desktop is the dedicated 480x320 X
+# framebuffer.  Override Crankshaft's default VNC/EGLFS output so its normal
+# Android Auto screen is rendered into that same physical display.
+install -d -m 0755 /etc/systemd/system/crankshaft-ui-slim.service.d
+cat > /etc/systemd/system/crankshaft-ui-slim.service.d/tunerpi-fb-display.conf <<'EOF'
+[Service]
+User=tuner
+Group=tuner
+EnvironmentFile=
+Environment="DISPLAY=:1"
+Environment="QT_QPA_PLATFORM=xcb"
+Environment="QT_X11_NO_MITSHM=1"
+Environment="QT_SCALE_FACTOR=0.6"
+EOF
+systemctl daemon-reload
 
 install -d -m 0755 "${INSTALL_ROOT}" "${USER_HOME}/TunerStudioProjects"
 install -d -o "${USER_NAME}" -g "${USER_NAME}" "${USER_HOME}/Desktop"
@@ -151,10 +166,11 @@ cat > /usr/local/bin/start-bmw-tunerstudio <<'EOF'
 set -euo pipefail
 PROJECT="/home/tuner/TunerStudioProjects/1989_BMW_325i_MicroSquirt"
 LOG_DIR="${PROJECT}/DataLogs"
+DISPLAY_TARGET="${TUNERPI_DISPLAY:-:1}"
 mkdir -p "${LOG_DIR}"
 while [ ! -e /dev/microsquirt ]; do sleep 1; done
 cd /opt/efi-analytics/TunerStudioMS
-exec /opt/efi-analytics/java/bin/java \
+exec env DISPLAY="${DISPLAY_TARGET}" /opt/efi-analytics/java/bin/java \
   -Xms128m -Xmx768m \
   -Duser.home=/home/tuner \
   -Dfile.encoding=UTF8 \
@@ -203,7 +219,7 @@ cat > /etc/crankshaft/profiles/host_profiles.json <<'EOF'
           "wireless.hotspot.password": "TunerPi-AA-325i",
           "wireless.hotspot.channel": 0,
           "video.transport_mode": "webrtc",
-          "resolution": "1280x480",
+          "resolution": "480x320",
           "fps": 30,
           "channels.video": true,
           "channels.mediaAudio": true,
@@ -234,10 +250,10 @@ case "${1:-}" in
     ;;
   tunerstudio)
     sudo systemctl stop crankshaft-ui-slim.service || true
-    if ! pgrep -f '[T]unerStudioMS.jar' >/dev/null; then
-      /usr/local/bin/start-bmw-tunerstudio &
-    fi
-    wmctrl -a 'TunerStudio' || true
+    # The 52Pi panel is a dedicated framebuffer X server on :1.  Replace a
+    # stale headless instance so Gauges always appears on the physical dash.
+    pkill -f '[T]unerStudioMS.jar' || true
+    TUNERPI_DISPLAY=:1 /usr/local/bin/start-bmw-tunerstudio >/var/log/tunerpi/tunerstudio.log 2>&1 &
     ;;
   logs)
     xdg-open /home/tuner/TunerStudioProjects/1989_BMW_325i_MicroSquirt/DataLogs
