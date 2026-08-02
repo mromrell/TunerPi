@@ -438,6 +438,11 @@ root = tk.Tk()
 root.title('TunerPi')
 root.configure(bg=BG)
 root.attributes('-fullscreen', True)
+# The SPI framebuffer X server intentionally has no window manager.  Tk's
+# fullscreen hint alone is therefore ignored; pin the dashboard to the exact
+# physical framebuffer dimensions as well.
+root.geometry(f'{root.winfo_screenwidth()}x{root.winfo_screenheight()}+0+0')
+root.overrideredirect(True)
 root.bind('<Escape>', lambda _event: root.attributes('-fullscreen', False))
 
 screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
