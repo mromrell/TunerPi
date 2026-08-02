@@ -67,12 +67,14 @@ printf 'deb [arch=%s signed-by=/usr/share/keyrings/opencardev-archive-keyring.gp
   "${ARCH}" "${CODENAME}" > /etc/apt/sources.list.d/opencardev.list
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  crankshaft-core crankshaft-ui-slim
+  crankshaft-core crankshaft-ui-slim libqt6sql6-sqlite
 # Remote viewing is deliberately optional: logging and the local touchscreen
 # remain usable if a package is unavailable on a future Pi OS mirror.
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   novnc websockify wayvnc || echo 'Remote display packages unavailable; logs API will still be installed.'
-systemctl enable crankshaft-core.service
+# Gauges are the default dashboard.  Start Android Auto only from its touch
+# tile so a nearby phone is not prompted to project on every Pi boot.
+systemctl disable crankshaft-core.service || true
 # The UI is started from the touch launcher.  Running it automatically would
 # take exclusive control of the display and hide the TunerStudio controls.
 systemctl disable crankshaft-ui-slim.service crankshaft-ui-slim-display-setup.service || true
@@ -256,6 +258,7 @@ case "${1:-}" in
     ;;
   stop-android-auto)
     sudo systemctl stop crankshaft-ui-slim.service || true
+    sudo systemctl stop crankshaft-core.service || true
     sudo nmcli connection down TunerPi-AA || true
     sudo nmcli connection up netplan-wlan0-OldEthelsPantaloons-2.4 || true
     ;;
